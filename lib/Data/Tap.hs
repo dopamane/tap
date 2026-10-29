@@ -6,6 +6,7 @@ import Data.Binary.Put
 import Data.Bits
 import Data.Int
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Semigroup
 
 data Tap = Tap{hdr :: Hdr, fields :: [Field]}
   deriving (Eq, Read, Show)
@@ -48,7 +49,57 @@ data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
 putStructs :: [Struct] -> Put
 putStructs [] = mempty
 putStructs [s] = putStruct s
-putStructs _ = undefined
+putStructs structs = case structs of
+  a@U8{}:b@U8{}:s   -> putStruct a <> putStructs (b:s)
+  a@U8{}:b@S8{}:s   -> putStruct a <> putStructs (b:s)
+  a@U8{}:b@U16{}:s  -> putStruct a <> padStruct 1 <> putStructs (b:s)
+  a@U8{}:b@S16{}:s  -> putStruct a <> padStruct 1 <> putStructs (b:s)
+  a@U8{}:b@U32{}:s  -> putStruct a <> padStruct 3 <> putStructs (b:s)
+  a@U8{}:b@S32{}:s  -> putStruct a <> padStruct 3 <> putStructs (b:s)
+  a@U8{}:b@U64{}:s  -> putStruct a <> padStruct 7 <> putStructs (b:s)
+  a@U8{}:b@S64{}:s  -> putStruct a <> padStruct 7 <> putStructs (b:s)
+  a@S8{}:b@U8{}:s   -> putStruct a <> putStructs (b:s)
+  a@S8{}:b@S8{}:s   -> putStruct a <> putStructs (b:s)
+  a@S8{}:b@U16{}:s  -> putStruct a <> padStruct 1 <> putStructs (b:s)
+  a@S8{}:b@S16{}:s  -> putStruct a <> padStruct 1 <> putStructs (b:s)
+  a@S8{}:b@U32{}:s  -> putStruct a <> padStruct 3 <> putStructs (b:s)
+  a@S8{}:b@S32{}:s  -> putStruct a <> padStruct 3 <> putStructs (b:s)
+  a@S8{}:b@U64{}:s  -> putStruct a <> padStruct 7 <> putStructs (b:s)
+  a@S8{}:b@S64{}:s  -> putStruct a <> padStruct 7 <> putStructs (b:s)
+  a@U16{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
+  a@U16{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
+  a@U16{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
+  a@U16{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
+  a@U16{}:b@U32{}:s -> putStruct a <> padStruct 2 <> putStructs (b:s)
+  a@U16{}:b@S32{}:s -> putStruct a <> padStruct 2 <> putStructs (b:s)
+  a@U16{}:b@U64{}:s -> putStruct a <> padStruct 6 <> putStructs (b:s)
+  a@U16{}:b@S64{}:s -> putStruct a <> padStruct 6 <> putStructs (b:s)
+  a@S16{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
+  a@S16{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
+  a@S16{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
+  a@S16{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
+  a@S16{}:b@U32{}:s -> putStruct a <> padStruct 2 <> putStructs (b:s)
+  a@S16{}:b@S32{}:s -> putStruct a <> padStruct 2 <> putStructs (b:s)
+  a@S16{}:b@U64{}:s -> putStruct a <> padStruct 6 <> putStructs (b:s)
+  a@S16{}:b@S64{}:s -> putStruct a <> padStruct 6 <> putStructs (b:s)
+  a@U32{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@U32{}:s -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@S32{}:s -> putStruct a <> putStructs (b:s)
+  a@U32{}:b@U64{}:s -> putStruct a <> padStruct 4 <> putStructs (b:s)
+  a@U32{}:b@S64{}:s -> putStruct a <> padStruct 4 <> putStructs (b:s)
+  a@S32{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@U32{}:s -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@S32{}:s -> putStruct a <> putStructs (b:s)
+  a@S32{}:b@U64{}:s -> putStruct a <> padStruct 4 <> putStructs (b:s)
+  a@S32{}:b@S64{}:s -> putStruct a <> padStruct 4 <> putStructs (b:s)
+  a@U64{}:b:s       -> putStruct a <> putStructs (b:s)
+  a@S64{}:b:s       -> putStruct a <> putStructs (b:s)
 
 putStruct :: Struct -> Put
 putStruct s = case s of
@@ -60,3 +111,6 @@ putStruct s = case s of
   S32 s32 -> putInt32le  s32
   U64 w64 -> putWord64le w64
   S64 s64 -> putInt64le  s64
+
+padStruct :: Int -> Put
+padStruct n = stimes n $ putWord8 0
