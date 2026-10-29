@@ -22,7 +22,7 @@ instance Binary Hdr where
   put h = do
     putWord8 (ver h) >> putWord8 (hpd h) >> putWord16le (len h)
     let p:|ps = prsnt h
-    putWord32le p >> go ps
+    putWord32le p >> if testBit p 31 then go ps else mempty
     where
       go [] = mempty
       go (p:ps) = putWord32le p <> if testBit p 31 then go ps else mempty
