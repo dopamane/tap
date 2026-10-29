@@ -14,7 +14,7 @@ instance Binary Hdr where
     where
       getPrsnt = do
         p <- getWord32le
-        if testBit p 31 then (p:|) <$> go else return $ pure p
+        if testBit p 31 then (p:|) <$> go else return $ p:|[]
         where
           go = do
             p' <- getWord32le
