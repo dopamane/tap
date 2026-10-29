@@ -4,6 +4,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
+import Data.Int
 import Data.List.NonEmpty (NonEmpty(..))
 
 data Tap = Tap{hdr :: Hdr, fields :: [Field]}
@@ -39,3 +40,23 @@ instance Binary Hdr where
 
 data Field = TSFT Word64 | Flags Word8
   deriving (Eq, Read, Show)
+
+data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
+  | S32 Int32 | U64 Word64 | S64 Int64
+  deriving (Eq, Read, Show)
+
+putStructs :: [Struct] -> Put
+putStructs [] = mempty
+putStructs [s] = putStruct s
+putStructs _ = undefined
+
+putStruct :: Struct -> Put
+putStruct s = case s of
+  U8  w8  -> putWord8 w8
+  S8  s8  -> putInt8  s8
+  U16 w16 -> putWord16le w16
+  S16 s16 -> putInt16le  s16
+  U32 w32 -> putWord32le w32
+  S32 s32 -> putInt32le  s32
+  U64 w64 -> putWord64le w64
+  S64 s64 -> putInt64le  s64
