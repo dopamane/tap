@@ -32,8 +32,13 @@ executable tap
   ghc-options:      -Wall -O2 -threaded
   hs-source-dirs:   exe
   main-is:          Main.hs
+  other-modules:    Paths_tap
+  autogen-modules:  Paths_tap
   build-depends:
     base < 5,
+    binary,
+    bytestring,
+    optparse-applicative,
     tap
 
 test-suite test

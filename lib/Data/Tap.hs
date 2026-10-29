@@ -17,8 +17,8 @@ instance Binary Hdr where
         if testBit p 31 then (p:|) <$> go else return $ p:|[]
         where
           go = do
-            p' <- getWord32le
-            if testBit p' 31 then (p':) <$> go else return [p']
+            p <- getWord32le
+            if testBit p 31 then (p:) <$> go else return [p]
   put h = do
     putWord8 (ver h) >> putWord8 (hpd h) >> putWord16le (len h)
     let p:|ps = prsnt h
