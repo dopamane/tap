@@ -1,4 +1,4 @@
-module Data.Tap (Tap(..), Hdr(..), Field(..)) where
+module Data.Tap (Tap(..), Hdr(..), Field(..), Struct(..), definedFields) where
 
 import Control.Monad
 import Data.Binary
@@ -40,8 +40,14 @@ instance Binary Hdr where
       go [] = mempty
       go (p:ps) = putWord32le p <> if testBit p 31 then go ps else mempty
 
-data Field = TSFT Word64 | Flags Word8
+data Field = Field{name :: String, num :: Int, structs :: [Struct]}
   deriving (Eq, Read, Show)
+
+definedFields :: [Field]
+definedFields =
+  [ Field "TSFT" 0 [U64 0]
+  , Field "Flags" 1 [U8 0]
+  ]
 
 data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
   | S32 Int32 | U64 Word64 | S64 Int64
