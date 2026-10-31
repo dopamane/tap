@@ -22,6 +22,7 @@ valid :: [Field] -> Tap -> Tap
 valid d t
   | dupNums d' = error "duplicate field num definition"
   | dupNums f' = error "duplicate field num present"
+  | unkNums d' f' = error "unknown field num present"
   | otherwise = t{fields=f'}
   where
     d' = sortOn num d
@@ -33,6 +34,12 @@ dupNums [_] = False
 dupNums (f:g:hs)
   | num f == num g = True
   | otherwise = dupNums (g:hs)
+
+unkNums :: [Field] -> [Field] -> Bool
+unkNums _ [] = False
+unkNums d (f:fs)
+  | num f `elem` fmap num d = unkNums d fs
+  | otherwise = True
 
 data CLI = ReadTap [Field] (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
 
