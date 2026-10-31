@@ -1,4 +1,5 @@
-module Data.Tap (Tap(..), putTap, Hdr(..), Field(..), Struct(..), definedFields) where
+module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Field(..), Struct(..)
+  , definedFields) where
 
 import Control.Monad
 import Data.Binary

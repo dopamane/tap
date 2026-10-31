@@ -15,7 +15,7 @@ main :: IO ()
 main = do
   cli <- customExecParser prefs' $ pinfo $ showVersion version
   case cli of
-    ReadTap fM -> print . runGet (get :: Get Hdr) =<< maybe BS.getContents BS.readFile fM
+    ReadTap d fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
     WriteTap d t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
 
 valid :: [Field] -> Tap -> Tap
@@ -34,7 +34,7 @@ dupNums (f:g:hs)
   | num f == num g = True
   | otherwise = dupNums (g:hs)
 
-data CLI = ReadTap (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
+data CLI = ReadTap [Field] (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -44,8 +44,8 @@ pinfo v = info (parser <**> simpleVersioner v <**> helper) $ progDesc "radiotap"
 
 parser :: Parser CLI
 parser = hsubparser $ mconcat
-  [ command "r" $ info (fmap ReadTap $
-    optional $ fileArg "binary intput file or stream STDIN") $
+  [ command "r" $ info (ReadTap <$> parseDefn <*>
+    optional (fileArg "binary intput file or stream STDIN")) $
     progDesc "read radiotap data"
   , command "w" $ info (WriteTap <$> parseDefn <*> parseTap <*>
     optional (fileArg "binary output file or stream STDOUT")) $
