@@ -28,7 +28,13 @@ getFields dfn Hdr{prsnt=p:|ps} = elaborate dfn nums <$> getStructs prsntStructs
     nums = prsntNums $ p:ps
 
 elaborate :: [Field] -> [Int] -> [Struct] -> [Field]
-elaborate = undefined
+elaborate dfn = go
+  where
+    go [] _ = []
+    go (n:ns) strcts = case find ((n ==).num) dfn of
+      Nothing -> error "undefined field num"
+      Just  f -> let (fstrcts, rstrcts) = splitAt (length $ structs f) strcts
+                 in f{structs=fstrcts}:go ns rstrcts
 
 lookupStruct :: [Field] -> Int -> Maybe [Struct]
 lookupStruct dfn n = structs <$> find ((n ==).num) dfn
