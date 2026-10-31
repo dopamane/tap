@@ -4,6 +4,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as BS
+import Data.List
 import Data.Tap
 import Data.Version
 import Options.Applicative
@@ -18,7 +19,20 @@ main = do
     WriteTap d t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
 
 valid :: [Field] -> Tap -> Tap
-valid = error "not impl"
+valid d t
+  | dupNums d' = error "duplicate field num definition"
+  | dupNums f' = error "duplicate field num present"
+  | otherwise = t{fields=f'}
+  where
+    d' = sortOn num d
+    f' = sortOn num $ fields t
+
+dupNums :: [Field] -> Bool
+dupNums [] = False
+dupNums [_] = False
+dupNums (f:g:hs)
+  | num f == num g = True
+  | otherwise = dupNums (g:hs)
 
 data CLI = ReadTap (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
 
