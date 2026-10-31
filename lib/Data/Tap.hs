@@ -7,22 +7,31 @@ import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
 import Data.Int
+import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe
 import Data.Semigroup
 
 data Tap = Tap{hdr :: Hdr, fields :: [Field]}
   deriving (Eq, Read, Show)
 
 getTap :: [Field] -> Get Tap
-getTap dfn = do
-  hdr <- get
-  Tap hdr <$> getFields dfn hdr
+getTap dfn = get >>= \h -> Tap h <$> getFields dfn h
 
 putTap :: Tap -> Put
 putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
 
 getFields :: [Field] -> Hdr -> Get [Field]
-getFields = undefined
+getFields dfn Hdr{prsnt=p:|ps} = elaborate dfn nums <$> getStructs prsntStructs
+  where
+    prsntStructs = join [join $ maybeToList $ lookupStruct dfn n | n <- nums]
+    nums = prsntNums $ p:ps
+
+elaborate :: [Field] -> [Int] -> [Struct] -> [Field]
+elaborate = undefined
+
+lookupStruct :: [Field] -> Int -> Maybe [Struct]
+lookupStruct dfn n = structs <$> find ((n ==).num) dfn
 
 prsntNums :: [Word32] -> [Int]
 prsntNums = concat . zipWith f [0..]
@@ -74,7 +83,7 @@ getStructs [s] = pure <$> case s of
   S32{} -> S32 <$> getInt32le
   U64{} -> U64 <$> getWord64le
   S64{} -> S64 <$> getInt64le
-getStructs structs = case structs of
+getStructs strcts = case strcts of
   U8{}:U8{}:s -> (:) <$> fmap U8 getWord8 <*> getStructs (U8 0:s)
   U8{}:S8{}:s -> (:) <$> fmap U8 getWord8 <*> getStructs (S8 0:s)
   U8{}:U16{}:s -> (:) <$> fmap U8 getWord8 <* getPad 1 <*> getStructs (U16 0:s)
@@ -131,6 +140,14 @@ getStructs structs = case structs of
   U64{}:S32{}:s -> (:) <$> fmap U64 getWord64le <*> getStructs (S32 0:s)
   U64{}:U64{}:s -> (:) <$> fmap U64 getWord64le <*> getStructs (U64 0:s)
   U64{}:S64{}:s -> (:) <$> fmap U64 getWord64le <*> getStructs (S64 0:s)
+  S64{}:U8{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (U8 0:s)
+  S64{}:S8{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (S8 0:s)
+  S64{}:U16{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (U16 0:s)
+  S64{}:S16{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (S16 0:s)
+  S64{}:U32{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (U32 0:s)
+  S64{}:S32{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (S32 0:s)
+  S64{}:U64{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (U64 0:s)
+  S64{}:S64{}:s -> (:) <$> fmap S64 getInt64le <*> getStructs (S64 0:s)
 
 getPad :: Int -> Get ()
 getPad n = replicateM_ n getWord8
@@ -138,7 +155,7 @@ getPad n = replicateM_ n getWord8
 putStructs :: [Struct] -> Put
 putStructs [] = mempty
 putStructs [s] = putStruct s
-putStructs structs = case structs of
+putStructs strcts = case strcts of
   a@U8{}:b@U8{}:s   -> putStruct a <> putStructs (b:s)
   a@U8{}:b@S8{}:s   -> putStruct a <> putStructs (b:s)
   a@U8{}:b@U16{}:s  -> putStruct a <> putPad 1 <> putStructs (b:s)
