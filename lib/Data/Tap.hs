@@ -1,5 +1,5 @@
 module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Field(..), Struct(..)
-  , definedFields) where
+  , definedFields, prsntNums) where
 
 import Control.Monad
 import Data.Binary
@@ -23,6 +23,11 @@ putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
 
 getFields :: [Field] -> Hdr -> Get [Field]
 getFields = undefined
+
+prsntNums :: [Word32] -> [Int]
+prsntNums = concat . zipWith f [0..]
+  where
+    f i w = [b + i * 32 | b <- [0..30], testBit w b]
 
 data Hdr = Hdr{ver :: Word8, hpd :: Word8, len :: Word16, prsnt :: NonEmpty Word32}
   deriving (Eq, Read, Show)
