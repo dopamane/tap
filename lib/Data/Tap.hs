@@ -1,4 +1,4 @@
-module Data.Tap (Tap(..), Hdr(..), Field(..), Struct(..), definedFields) where
+module Data.Tap (Tap(..), putTap, Hdr(..), Field(..), Struct(..), definedFields) where
 
 import Control.Monad
 import Data.Binary
@@ -12,12 +12,16 @@ import Data.Semigroup
 data Tap = Tap{hdr :: Hdr, fields :: [Field]}
   deriving (Eq, Read, Show)
 
-instance Binary Tap where
-  get = undefined
-  put (Tap h fs) = put h >> putFields fs
+getTap :: [Field] -> Get Tap
+getTap dfn = do
+  hdr <- get
+  Tap hdr <$> getFields dfn hdr
 
-putFields :: [Field] -> Put
-putFields = undefined
+putTap :: Tap -> Put
+putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
+
+getFields :: [Field] -> Hdr -> Get [Field]
+getFields = undefined
 
 data Hdr = Hdr{ver :: Word8, hpd :: Word8, len :: Word16, prsnt :: NonEmpty Word32}
   deriving (Eq, Read, Show)

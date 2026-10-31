@@ -15,7 +15,10 @@ main = do
   cli <- customExecParser prefs' $ pinfo $ showVersion version
   case cli of
     ReadTap fM -> print . runGet (get :: Get Hdr) =<< maybe BS.getContents BS.readFile fM
-    WriteTap _ h fM -> maybe BS.putStr BS.writeFile fM $ runPut $ put h
+    WriteTap d t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
+
+valid :: [Field] -> Tap -> Tap
+valid = error "not impl"
 
 data CLI = ReadTap (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
 
