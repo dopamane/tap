@@ -1,6 +1,5 @@
 module Main (main) where
 
-import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as BS

@@ -9,7 +9,6 @@ import Data.Bits
 import Data.Int
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe
 import Data.Semigroup
 
 data Tap = Tap{hdr :: Hdr, fields :: [Field]}
@@ -22,22 +21,27 @@ putTap :: Tap -> Put
 putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
 
 getFields :: [Field] -> Hdr -> Get [Field]
-getFields dfn Hdr{prsnt=p:|ps} = elaborate dfn nums <$> getStructs prsntStructs
+getFields dfn Hdr{prsnt=p:|ps} = do
+  prsntStructs <- forM nums $ \n -> case lookupField dfn n of
+    Nothing -> fail $ "present structs: undefined field num: " <> show n
+    Just  f -> return $ structs f
+  either fail return . elaborate dfn nums =<< getStructs (concat prsntStructs)
   where
-    prsntStructs = join [join $ maybeToList $ lookupStruct dfn n | n <- nums]
     nums = prsntNums $ p:ps
 
-elaborate :: [Field] -> [Int] -> [Struct] -> [Field]
+elaborate :: [Field] -> [Int] -> [Struct] -> Either String [Field]
 elaborate dfn = go
   where
-    go [] _ = []
-    go (n:ns) strcts = case find ((n ==).num) dfn of
-      Nothing -> error "undefined field num"
+    go [] [] = Right []
+    go [] s@(_:_) = Left $ "elaborate: too many structs: " <> show s
+    go ns@(_:_) [] = Left $ "elaborate: too many present: " <> show ns
+    go (n:ns) strcts = case lookupField dfn n of
+      Nothing -> Left $ "elaborate: undefined field num: " <> show n
       Just  f -> let (fstrcts, rstrcts) = splitAt (length $ structs f) strcts
-                 in f{structs=fstrcts}:go ns rstrcts
+                 in (f{structs=fstrcts}:) <$> go ns rstrcts
 
-lookupStruct :: [Field] -> Int -> Maybe [Struct]
-lookupStruct dfn n = structs <$> find ((n ==).num) dfn
+lookupField :: [Field] -> Int -> Maybe Field
+lookupField dfn n = find ((n ==).num) dfn
 
 prsntNums :: [Word32] -> [Int]
 prsntNums = concat . zipWith f [0..]
