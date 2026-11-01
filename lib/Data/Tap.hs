@@ -37,8 +37,54 @@ elaborate dfn = go
     go ns@(_:_) [] = Left $ "elaborate: too many present: " <> show ns
     go (n:ns) strcts = case lookupField dfn n of
       Nothing -> Left $ "elaborate: undefined field num: " <> show n
-      Just  f -> let (fstrcts, rstrcts) = splitAt (length $ structs f) strcts
-                 in (f{structs=fstrcts}:) <$> go ns rstrcts
+      Just f -> case consume f strcts of
+        Left err -> Left err
+        Right (f', rest) -> (f':) <$> go ns rest
+
+consume :: Field -> [Struct] -> Either String (Field, [Struct])
+consume f@Field{structs=ds} strcts = case match ds strcts of
+  Left err -> Left err
+  Right (t, rest) -> Right (f{structs=t}, rest)
+
+match :: [Struct] -> [Struct] -> Either String ([Struct], [Struct])
+match [] rest = Right ([], rest)
+match _ [] = Left "match: not enough structs"
+match (d:ds) (s:rest) = case matchStruct d s of
+  Left err -> Left err
+  Right s' -> case match ds rest of
+    Left err -> Left err
+    Right (ms, rest') -> Right (s':ms, rest')
+
+matchStruct :: Struct -> Struct -> Either String Struct
+matchStruct dfn strct = case (dfn, strct) of
+  (U8{},  U8  u8)  -> Right $ U8  u8
+  (S8{},  S8  s8)  -> Right $ S8  s8
+  (U16{}, U16 u16) -> Right $ U16 u16
+  (S16{}, S16 s16) -> Right $ S16 s16
+  (U32{}, U32 u32) -> Right $ U32 u32
+  (S32{}, S32 s32) -> Right $ S32 s32
+  (U64{}, U64 u64) -> Right $ U64 u64
+  (S64{}, S64 s64) -> Right $ S64 s64
+  (expct, actual)  -> Left $ "expected " ++ renderExp expct ++ " but got " ++ renderAct actual
+  where
+    renderExp e = case e of
+      U8{}  -> "u8"
+      S8{}  -> "s8"
+      U16{} -> "u16"
+      S16{} -> "s16"
+      U32{} -> "u32"
+      S32{} -> "s32"
+      U64{} -> "u64"
+      S64{} -> "s64"
+    renderAct e = case e of
+      U8  u8  -> "u8 "  <> show u8
+      S8  s8  -> "s8 "  <> show s8
+      U16 u16 -> "u16 " <> show u16
+      S16 s16 -> "s16 " <> show s16
+      U32 u32 -> "u32 " <> show u32
+      S32 s32 -> "s32 " <> show s32
+      U64 u64 -> "u64 " <> show u64
+      S64 s64 -> "s64 " <> show s64
 
 lookupField :: [Field] -> Int -> Maybe Field
 lookupField dfn n = find ((n ==).num) dfn
@@ -165,57 +211,34 @@ getPad n = replicateM_ n getWord8
 putStructs :: [Struct] -> Put
 putStructs [] = mempty
 putStructs [s] = putStruct s
-putStructs strcts = case strcts of
-  a@U8{}:b@U8{}:s   -> putStruct a <> putStructs (b:s)
-  a@U8{}:b@S8{}:s   -> putStruct a <> putStructs (b:s)
-  a@U8{}:b@U16{}:s  -> putStruct a <> putPad 1 <> putStructs (b:s)
-  a@U8{}:b@S16{}:s  -> putStruct a <> putPad 1 <> putStructs (b:s)
-  a@U8{}:b@U32{}:s  -> putStruct a <> putPad 3 <> putStructs (b:s)
-  a@U8{}:b@S32{}:s  -> putStruct a <> putPad 3 <> putStructs (b:s)
-  a@U8{}:b@U64{}:s  -> putStruct a <> putPad 7 <> putStructs (b:s)
-  a@U8{}:b@S64{}:s  -> putStruct a <> putPad 7 <> putStructs (b:s)
-  a@S8{}:b@U8{}:s   -> putStruct a <> putStructs (b:s)
-  a@S8{}:b@S8{}:s   -> putStruct a <> putStructs (b:s)
-  a@S8{}:b@U16{}:s  -> putStruct a <> putPad 1 <> putStructs (b:s)
-  a@S8{}:b@S16{}:s  -> putStruct a <> putPad 1 <> putStructs (b:s)
-  a@S8{}:b@U32{}:s  -> putStruct a <> putPad 3 <> putStructs (b:s)
-  a@S8{}:b@S32{}:s  -> putStruct a <> putPad 3 <> putStructs (b:s)
-  a@S8{}:b@U64{}:s  -> putStruct a <> putPad 7 <> putStructs (b:s)
-  a@S8{}:b@S64{}:s  -> putStruct a <> putPad 7 <> putStructs (b:s)
-  a@U16{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
-  a@U16{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
-  a@U16{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
-  a@U16{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
-  a@U16{}:b@U32{}:s -> putStruct a <> putPad 2 <> putStructs (b:s)
-  a@U16{}:b@S32{}:s -> putStruct a <> putPad 2 <> putStructs (b:s)
-  a@U16{}:b@U64{}:s -> putStruct a <> putPad 6 <> putStructs (b:s)
-  a@U16{}:b@S64{}:s -> putStruct a <> putPad 6 <> putStructs (b:s)
-  a@S16{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
-  a@S16{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
-  a@S16{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
-  a@S16{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
-  a@S16{}:b@U32{}:s -> putStruct a <> putPad 2 <> putStructs (b:s)
-  a@S16{}:b@S32{}:s -> putStruct a <> putPad 2 <> putStructs (b:s)
-  a@S16{}:b@U64{}:s -> putStruct a <> putPad 6 <> putStructs (b:s)
-  a@S16{}:b@S64{}:s -> putStruct a <> putPad 6 <> putStructs (b:s)
-  a@U32{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@U32{}:s -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@S32{}:s -> putStruct a <> putStructs (b:s)
-  a@U32{}:b@U64{}:s -> putStruct a <> putPad 4 <> putStructs (b:s)
-  a@U32{}:b@S64{}:s -> putStruct a <> putPad 4 <> putStructs (b:s)
-  a@S32{}:b@U8{}:s  -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@S8{}:s  -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@U16{}:s -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@S16{}:s -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@U32{}:s -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@S32{}:s -> putStruct a <> putStructs (b:s)
-  a@S32{}:b@U64{}:s -> putStruct a <> putPad 4 <> putStructs (b:s)
-  a@S32{}:b@S64{}:s -> putStruct a <> putPad 4 <> putStructs (b:s)
-  a@U64{}:b:s       -> putStruct a <> putStructs (b:s)
-  a@S64{}:b:s       -> putStruct a <> putStructs (b:s)
+putStructs (a:b:s) = putStruct a <> pad <> putStructs (b:s)
+  where
+    pad = case (a,b) of
+      (U8{}, U16{}) -> putPad 1
+      (U8{}, S16{}) -> putPad 1
+      (U8{}, U32{}) -> putPad 3
+      (U8{}, S32{}) -> putPad 3
+      (U8{}, U64{}) -> putPad 7
+      (U8{}, S64{}) -> putPad 7
+      (S8{}, U16{}) -> putPad 1
+      (S8{}, S16{}) -> putPad 1
+      (S8{}, U32{}) -> putPad 3
+      (S8{}, S32{}) -> putPad 3
+      (S8{}, U64{}) -> putPad 7
+      (S8{}, S64{}) -> putPad 7
+      (U16{},U32{}) -> putPad 2
+      (U16{},S32{}) -> putPad 2
+      (U16{},U64{}) -> putPad 6
+      (U16{},S64{}) -> putPad 6
+      (S16{},U32{}) -> putPad 2
+      (S16{},S32{}) -> putPad 2
+      (S16{},U64{}) -> putPad 6
+      (S16{},S64{}) -> putPad 6
+      (U32{},U64{}) -> putPad 4
+      (U32{},S64{}) -> putPad 4
+      (S32{},U64{}) -> putPad 4
+      (S32{},S64{}) -> putPad 4
+      (_    ,_    ) -> mempty
 
 putStruct :: Struct -> Put
 putStruct s = case s of
