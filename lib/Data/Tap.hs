@@ -1,5 +1,5 @@
 module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Fld(..), Struct(..)
-  , defFlds) where
+  , structLen, defFlds) where
 
 import Control.Monad
 import Data.Binary
@@ -9,7 +9,6 @@ import Data.Bits
 import Data.Int
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup
 
 data Tap = Tap{hdr :: Hdr, fields :: [Fld]}
   deriving (Eq, Read, Show)
@@ -18,7 +17,7 @@ getTap :: [Fld] -> Get Tap
 getTap dfn = get >>= \h -> Tap h <$> getFlds dfn h
 
 putTap :: Tap -> Put
-putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
+putTap (Tap h fs) = put h <> foldMap putStruct (padStructs $ structs =<< fs)
 
 getFlds :: [Fld] -> Hdr -> Get [Fld]
 getFlds dfn Hdr{prsnt=p:|ps} = do
@@ -120,6 +119,17 @@ data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
   | S32 Int32 | U64 Word64 | S64 Int64
   deriving (Eq, Read, Show)
 
+structLen :: Struct -> Integer
+structLen s = case s of
+  U8{}  -> 1
+  S8{}  -> 1
+  U16{} -> 2
+  S16{} -> 2
+  U32{} -> 4
+  S32{} -> 4
+  U64{} -> 8
+  S64{} -> 8
+
 getStructs :: [Struct] -> Get [Struct]
 getStructs [] = return []
 getStructs [s] = pure <$> getStruct s
@@ -136,10 +146,10 @@ getStruct s = case s of
   U64{} -> U64 <$> getWord64le
   S64{} -> S64 <$> getInt64le
 
-putStructs :: [Struct] -> Put
-putStructs [] = mempty
-putStructs [s] = putStruct s
-putStructs (a:b:s) = putStruct a <> stimesMonoid (pad a b) (putWord8 0) <> putStructs (b:s)
+padStructs :: [Struct] -> [Struct]
+padStructs [] = []
+padStructs [s] = [s]
+padStructs (a:b:s) = [a] ++ replicate (pad a b) (U8 0) ++ padStructs (b:s)
 
 putStruct :: Struct -> Put
 putStruct s = case s of
