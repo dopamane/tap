@@ -8,6 +8,7 @@ import Data.List.NonEmpty(NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Tap
 import Data.Version
+import Data.Word
 import Options.Applicative
 import Options.Applicative.NonEmpty
 import Paths_tap
@@ -18,9 +19,9 @@ main = do
   d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap h fs fM -> do
+    WriteTap (v,p,l,ps) fs fM -> do
       fs' <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt fs
-      maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ Tap h fs'
+      maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ Tap (Hdr v p l ps) fs'
 
 fmt :: [Fld] -> Either String [Fld]
 fmt = go . NE.groupWith num . sortOn num
@@ -39,7 +40,8 @@ unk ds = go
 
 data CLI = CLI [Fld] Cmd
 
-data Cmd = ReadTap (Maybe FilePath) | WriteTap Hdr [Fld] (Maybe FilePath)
+data Cmd = ReadTap (Maybe FilePath)
+  | WriteTap (Word8, Word8, Word16, NonEmpty Word32) [Fld] (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -59,10 +61,10 @@ parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
 fileArg :: String -> Parser FilePath
 fileArg h = strArgument $ metavar "FILE" <> completer (bashCompleter "file") <> help h
 
-parseHdr :: Parser Hdr
-parseHdr = parserOptionGroup "Header" $
-  Hdr <$> option auto (long "ver" <> metavar "WORD8" <> help "header version")
-  <*> option auto (long "hpd" <> metavar "WORD8" <> help "header pad")
+parseHdr :: Parser (Word8, Word8, Word16, NonEmpty Word32)
+parseHdr = parserOptionGroup "Header" $ (,,,)
+  <$> option auto (long "ver" <> metavar "WORD8" <> value 0 <> showDefault <> help "header version")
+  <*> option auto (long "hpd" <> metavar "WORD8" <> value 0 <> showDefault <> help "header pad")
   <*> option auto (long "len" <> metavar "WORD16" <> help "entire length")
   <*> some1 (option auto $ long "prsnt" <> metavar "WORD32" <> help "header present fields")
 
