@@ -1,7 +1,13 @@
+{-# LANGUAGE BinaryLiterals     #-}
+{-# LANGUAGE NumericUnderscores #-}
+
 module Main (main) where
 
 import Data.Binary
+import Data.Binary.Get
+import Data.Binary.Put
 import Data.Bits
+import qualified Data.ByteString.Lazy as BS
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Tap
 import Hedgehog
@@ -9,9 +15,30 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
+import Test.Tasty.HUnit
 
 main :: IO ()
-main = defaultMain $ testGroup "Data.Tap" [hdrBinTrip]
+main = defaultMain $ testGroup "Data.Tap" [hdrBinTrip, testDetail]
+
+testDetail :: TestTree
+testDetail = testCaseSteps "detail" $ \step -> do
+  step "encd"
+  BS.unpack (runPut $ putTap detailTap) @?= detailBS
+  step "decd"
+  runGet (getTap detailFlds) (BS.pack detailBS) @?= detailTap
+  step "trip"
+  runGet (getTap detailFlds) (runPut $ putTap detailTap) @?= detailTap
+
+detailTap :: Tap
+detailTap = Tap (Hdr 0 0 16 $ pure 0b0000_0000_0000_0000_0100_0001_0010_0010)
+  detailFlds
+
+detailFlds :: [Fld]
+detailFlds = [Fld "foo" 1 [U8 0x10], Fld "bar" 5 [U16 3], Fld "baz" 8 [U8 3]
+  , Fld "quz" 14 [U16 0xABCD]]
+
+detailBS :: [Word8]
+detailBS = [0,0,16,0,0b0010_0010,0b0100_0001,0,0,0x10,0,3,0,3,0,0xCD,0xAB]
 
 hdrBinTrip :: TestTree
 hdrBinTrip = testProperty "HdrBinTrip" $ property $ do
