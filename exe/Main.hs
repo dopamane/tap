@@ -18,7 +18,9 @@ main = do
   d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
+    WriteTap t fM -> do
+      f <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt (fields t)
+      maybe BS.putStr BS.writeFile fM $ runPut $ putTap t{fields=f}
 
 fmt :: [Fld] -> Either String [Fld]
 fmt = go . NE.groupWith num . sortOn num
@@ -27,28 +29,13 @@ fmt = go . NE.groupWith num . sortOn num
     go ((f:|[]):gs) = (f:) <$> go gs
     go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
 
-valid :: [Fld] -> Tap -> Tap
-valid d t
-  | dupNums d' = error "duplicate field num definition"
-  | dupNums f' = error "duplicate field num present"
-  | unkNums d' f' = error "unknown field num present"
-  | otherwise = t{fields=f'}
+unk :: [Int] -> [Fld] -> Either String [Fld]
+unk ds = go
   where
-    d' = sortOn num d
-    f' = sortOn num $ fields t
-
-dupNums :: [Fld] -> Bool
-dupNums [] = False
-dupNums [_] = False
-dupNums (f:g:hs)
-  | num f == num g = True
-  | otherwise = dupNums (g:hs)
-
-unkNums :: [Fld] -> [Fld] -> Bool
-unkNums _ [] = False
-unkNums d (f:fs)
-  | num f `elem` fmap num d = unkNums d fs
-  | otherwise = True
+    go [] = Right []
+    go (f:fs)
+      | num f `elem` ds = (f:) <$> go fs
+      | otherwise = Left $ "undefined field: " ++ show f
 
 data CLI = CLI [Fld] Cmd
 
@@ -90,12 +77,12 @@ parseFld = parserOptionGroup "Fields" $ asum
     help "properties of tx and rx frames"
   , Fld "" <$> option auto (long "fld" <> metavar "INT" <> help "field num")
     <*> many parseStructVal
-
   ]
 
 parseDefn :: Parser [Fld]
 parseDefn = parserOptionGroup "Definition" $ asum
-  [ flag' defFlds $ long "dfs" <> help "radiotap defined fields"
+  [ flag [] [] $ long "empty" <> help "empty field definition default"
+  , flag' defFlds $ long "dfs" <> help "radiotap defined fields"
   , some parseFldDef
   ]
 
