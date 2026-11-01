@@ -18,9 +18,9 @@ main = do
   d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap t fM -> do
-      f <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt (fields t)
-      maybe BS.putStr BS.writeFile fM $ runPut $ putTap t{fields=f}
+    WriteTap h fs fM -> do
+      fs' <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt fs
+      maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ Tap h fs'
 
 fmt :: [Fld] -> Either String [Fld]
 fmt = go . NE.groupWith num . sortOn num
@@ -39,7 +39,7 @@ unk ds = go
 
 data CLI = CLI [Fld] Cmd
 
-data Cmd = ReadTap (Maybe FilePath) | WriteTap Tap (Maybe FilePath)
+data Cmd = ReadTap (Maybe FilePath) | WriteTap Hdr [Fld] (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -52,15 +52,12 @@ parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
   [ command "r" $ info (ReadTap <$>
     optional (fileArg "binary intput file or stream STDIN")) $
     progDesc "read radiotap data"
-  , command "w" $ info (WriteTap <$> parseTap <*>
+  , command "w" $ info (WriteTap <$> parseHdr <*> many parseFld <*>
     optional (fileArg "binary output file or stream STDOUT")) $
     progDesc "write radiotap data"]
 
 fileArg :: String -> Parser FilePath
 fileArg h = strArgument $ metavar "FILE" <> completer (bashCompleter "file") <> help h
-
-parseTap :: Parser Tap
-parseTap = Tap <$> parseHdr <*> many parseFld
 
 parseHdr :: Parser Hdr
 parseHdr = parserOptionGroup "Header" $
