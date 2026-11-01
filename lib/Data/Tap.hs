@@ -1,5 +1,5 @@
-module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Field(..), Struct(..)
-  , definedFields, prsntNums) where
+module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Fld(..), Struct(..)
+  , defFlds) where
 
 import Control.Monad
 import Data.Binary
@@ -11,38 +11,41 @@ import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
 
-data Tap = Tap{hdr :: Hdr, fields :: [Field]}
+data Tap = Tap{hdr :: Hdr, fields :: [Fld]}
   deriving (Eq, Read, Show)
 
-getTap :: [Field] -> Get Tap
-getTap dfn = get >>= \h -> Tap h <$> getFields dfn h
+getTap :: [Fld] -> Get Tap
+getTap dfn = get >>= \h -> Tap h <$> getFlds dfn h
 
 putTap :: Tap -> Put
 putTap (Tap h fs) = put h <> putStructs (structs =<< fs)
 
-getFields :: [Field] -> Hdr -> Get [Field]
-getFields dfn Hdr{prsnt=p:|ps} = do
-  prsntStructs <- forM nums $ \n -> case lookupField dfn n of
+getFlds :: [Fld] -> Hdr -> Get [Fld]
+getFlds dfn Hdr{prsnt=p:|ps} = do
+  prsntStructs <- forM nums $ \n -> case lookupFld dfn n of
     Nothing -> fail $ "present structs: undefined field num: " <> show n
     Just  f -> return $ structs f
   either fail return . elaborate dfn nums =<< getStructs (concat prsntStructs)
   where
-    nums = prsntNums $ p:ps
+    nums = concat $ zipWith presents [0..] $ p:ps
 
-elaborate :: [Field] -> [Int] -> [Struct] -> Either String [Field]
+presents :: Int -> Word32 -> [Int]
+presents i w = [b + i * 32 | b <- [0..30], testBit w b]
+
+elaborate :: [Fld] -> [Int] -> [Struct] -> Either String [Fld]
 elaborate dfn = go
   where
     go [] [] = Right []
     go [] s@(_:_) = Left $ "elaborate: too many structs: " <> show s
     go ns@(_:_) [] = Left $ "elaborate: too many present: " <> show ns
-    go (n:ns) strcts = case lookupField dfn n of
+    go (n:ns) strcts = case lookupFld dfn n of
       Nothing -> Left $ "elaborate: undefined field num: " <> show n
       Just f -> case consume f strcts of
         Left err -> Left err
         Right (f', rest) -> (f':) <$> go ns rest
 
-consume :: Field -> [Struct] -> Either String (Field, [Struct])
-consume f@Field{structs=ds} strcts = case match ds strcts of
+consume :: Fld -> [Struct] -> Either String (Fld, [Struct])
+consume f@Fld{structs=ds} strcts = case match ds strcts of
   Left err -> Left err
   Right (t, rest) -> Right (f{structs=t}, rest)
 
@@ -86,13 +89,8 @@ matchStruct dfn strct = case (dfn, strct) of
       U64 u64 -> "u64 " <> show u64
       S64 s64 -> "s64 " <> show s64
 
-lookupField :: [Field] -> Int -> Maybe Field
-lookupField dfn n = find ((n ==).num) dfn
-
-prsntNums :: [Word32] -> [Int]
-prsntNums = concat . zipWith f [0..]
-  where
-    f i w = [b + i * 32 | b <- [0..30], testBit w b]
+lookupFld :: [Fld] -> Int -> Maybe Fld
+lookupFld dfn n = find ((n ==).num) dfn
 
 data Hdr = Hdr{ver :: Word8, hpd :: Word8, len :: Word16, prsnt :: NonEmpty Word32}
   deriving (Eq, Read, Show)
@@ -115,14 +113,8 @@ instance Binary Hdr where
       go [] = mempty
       go (p:ps) = putWord32le p <> if testBit p 31 then go ps else mempty
 
-data Field = Field{name :: String, num :: Int, structs :: [Struct]}
+data Fld = Fld{name :: String, num :: Int, structs :: [Struct]}
   deriving (Eq, Read, Show)
-
-definedFields :: [Field]
-definedFields =
-  [ Field "TSFT" 0 [U64 0]
-  , Field "Flags" 1 [U8 0]
-  ]
 
 data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
   | S32 Int32 | U64 Word64 | S64 Int64
@@ -147,7 +139,7 @@ getStruct s = case s of
 putStructs :: [Struct] -> Put
 putStructs [] = mempty
 putStructs [s] = putStruct s
-putStructs (a:b:s) = putStruct a <> stimes (pad a b) (putWord8 0) <> putStructs (b:s)
+putStructs (a:b:s) = putStruct a <> stimesMonoid (pad a b) (putWord8 0) <> putStructs (b:s)
 
 putStruct :: Struct -> Put
 putStruct s = case s of
@@ -187,3 +179,14 @@ pad a b = case (a,b) of
   (S32{},U64{}) -> 4
   (S32{},S64{}) -> 4
   (_    ,_    ) -> 0
+
+defFlds :: [Fld]
+defFlds = [Fld "TSFT" 0 [U64 0], Fld "Flags" 1 [U8 0]
+  , Fld "Rate" 2 [U8 0], Fld "Channel" 3 [U16 0, U16 0]
+  , Fld "FHSS" 4 [U8 0, U8 0], Fld "Antenna Signal" 5 [S8 0]
+  , Fld "Antenna Noise" 6 [S8 0], Fld "Lock quality" 7 [U16 0]
+  , Fld "TX attenuation" 8 [U16 0], Fld "dB TX attenuation" 9 [U16 0]
+  , Fld "dBm TX power" 10 [S8 0], Fld "Antenna" 11 [U8 0]
+  , Fld "dB antenna signal" 12 [U8 0], Fld "dB antenna noise" 13 [U8 0]
+  , Fld "RX flags" 14 [U16 0], Fld "TX flags" 15 [U16 0]
+  , Fld "MCS" 19 [U8 0, U8 0, U8 0]]

@@ -17,7 +17,7 @@ main = do
     ReadTap d fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
     WriteTap d t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
 
-valid :: [Field] -> Tap -> Tap
+valid :: [Fld] -> Tap -> Tap
 valid d t
   | dupNums d' = error "duplicate field num definition"
   | dupNums f' = error "duplicate field num present"
@@ -27,20 +27,20 @@ valid d t
     d' = sortOn num d
     f' = sortOn num $ fields t
 
-dupNums :: [Field] -> Bool
+dupNums :: [Fld] -> Bool
 dupNums [] = False
 dupNums [_] = False
 dupNums (f:g:hs)
   | num f == num g = True
   | otherwise = dupNums (g:hs)
 
-unkNums :: [Field] -> [Field] -> Bool
+unkNums :: [Fld] -> [Fld] -> Bool
 unkNums _ [] = False
 unkNums d (f:fs)
   | num f `elem` fmap num d = unkNums d fs
   | otherwise = True
 
-data CLI = ReadTap [Field] (Maybe FilePath) | WriteTap [Field] Tap (Maybe FilePath)
+data CLI = ReadTap [Fld] (Maybe FilePath) | WriteTap [Fld] Tap (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -61,7 +61,7 @@ fileArg :: String -> Parser FilePath
 fileArg h = strArgument $ metavar "FILE" <> completer (bashCompleter "file") <> help h
 
 parseTap :: Parser Tap
-parseTap = Tap <$> parseHdr <*> many parseField
+parseTap = Tap <$> parseHdr <*> many parseFld
 
 parseHdr :: Parser Hdr
 parseHdr = parserOptionGroup "Header" $
@@ -70,39 +70,39 @@ parseHdr = parserOptionGroup "Header" $
   <*> option auto (long "len" <> metavar "WORD16" <> help "entire length")
   <*> some1 (option auto $ long "prsnt" <> metavar "WORD32" <> help "header present fields")
 
-parseField :: Parser Field
-parseField = parserOptionGroup "Fields" $ asum
-  [ fmap (Field "TSFT" 0 . pure . U64) $ option auto $ long "tsft" <> metavar "WORD64" <>
+parseFld :: Parser Fld
+parseFld = parserOptionGroup "Fields" $ asum
+  [ fmap (Fld "TSFT" 0 . pure . U64) $ option auto $ long "tsft" <> metavar "WORD64" <>
     help "time sync function timer usec"
-  , fmap (Field "Flags" 1 . pure . U8) $ option auto $ long "flags" <> metavar "WORD8" <>
+  , fmap (Fld "Flags" 1 . pure . U8) $ option auto $ long "flags" <> metavar "WORD8" <>
     help "properties of tx and rx frames"
-  , Field "" <$> option auto (long "field" <> metavar "INT" <> help "field num")
+  , Fld "" <$> option auto (long "fld" <> metavar "INT" <> help "field num")
     <*> many parseStructVal
 
   ]
 
-parseDefn :: Parser [Field]
+parseDefn :: Parser [Fld]
 parseDefn = parserOptionGroup "Definition" $ asum
-  [ flag' definedFields $ long "def-fields" <> help "radiotap defined fields"
-  , some parseFieldDef
+  [ flag' defFlds $ long "dflds" <> help "radiotap defined fields"
+  , some parseFldDef
   ]
 
-parseFieldDef :: Parser Field
-parseFieldDef = Field
-  <$> strOption (long "def-name" <> metavar "STR" <> help "field definition name")
-  <*> option auto (long "def-num" <> metavar "INT" <> help "field definition num")
+parseFldDef :: Parser Fld
+parseFldDef = Fld
+  <$> strOption (long "name" <> metavar "STR" <> help "field definition name")
+  <*> option auto (long "num" <> metavar "INT" <> help "field definition num")
   <*> many parseStruct
 
 parseStruct :: Parser Struct
 parseStruct = asum
-  [ flag' (U8  0) $ long "def-u8"  <> help "u8 field definition"
-  , flag' (S8  0) $ long "def-s8"  <> help "s8 field definition"
-  , flag' (U16 0) $ long "def-u16" <> help "u16 field definition"
-  , flag' (S16 0) $ long "def-s16" <> help "s16 field definition"
-  , flag' (U32 0) $ long "def-u32" <> help "u32 field definition"
-  , flag' (S32 0) $ long "def-s32" <> help "s32 field definition"
-  , flag' (U64 0) $ long "def-u64" <> help "u64 field definition"
-  , flag' (S64 0) $ long "def-s64" <> help "s64 field definition"
+  [ flag' (U8  0) $ long "du8"  <> help "u8 field definition"
+  , flag' (S8  0) $ long "ds8"  <> help "s8 field definition"
+  , flag' (U16 0) $ long "du16" <> help "u16 field definition"
+  , flag' (S16 0) $ long "ds16" <> help "s16 field definition"
+  , flag' (U32 0) $ long "du32" <> help "u32 field definition"
+  , flag' (S32 0) $ long "ds32" <> help "s32 field definition"
+  , flag' (U64 0) $ long "du64" <> help "u64 field definition"
+  , flag' (S64 0) $ long "ds64" <> help "s64 field definition"
   ]
 
 parseStructVal :: Parser Struct
