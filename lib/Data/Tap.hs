@@ -1,5 +1,5 @@
 module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Fld(..), Struct(..)
-  , structLen, defFlds) where
+  , defFlds, structLen, padStructs) where
 
 import Control.Monad
 import Data.Binary

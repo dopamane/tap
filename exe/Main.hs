@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Control.Monad
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as BS
@@ -19,9 +20,15 @@ main = do
   d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap (v,p,l,ps) fs fM -> do
+    WriteTap (v,p,ps) fs fM -> do
       fs' <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt fs
-      maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ Tap (Hdr v p l ps) fs'
+      let hlen = 4 + fromIntegral (NE.length ps) * 4
+          slen = sum $ map structLen $ padStructs $ structs =<< fs'
+          tlen = hlen + slen
+      when (tlen >= fromIntegral (maxBound :: Word16)) $
+        fail $ "struct length too long: " <> show tlen
+      maybe BS.putStr BS.writeFile fM $ runPut $ putTap $
+        Tap (Hdr v p (fromIntegral tlen) ps) fs'
 
 fmt :: [Fld] -> Either String [Fld]
 fmt = go . NE.groupWith num . sortOn num
@@ -41,7 +48,7 @@ unk ds = go
 data CLI = CLI [Fld] Cmd
 
 data Cmd = ReadTap (Maybe FilePath)
-  | WriteTap (Word8, Word8, Word16, NonEmpty Word32) [Fld] (Maybe FilePath)
+  | WriteTap (Word8, Word8, NonEmpty Word32) [Fld] (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -61,11 +68,10 @@ parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
 fileArg :: String -> Parser FilePath
 fileArg h = strArgument $ metavar "FILE" <> completer (bashCompleter "file") <> help h
 
-parseHdr :: Parser (Word8, Word8, Word16, NonEmpty Word32)
-parseHdr = parserOptionGroup "Header" $ (,,,)
+parseHdr :: Parser (Word8, Word8, NonEmpty Word32)
+parseHdr = parserOptionGroup "Header" $ (,,)
   <$> option auto (long "ver" <> metavar "WORD8" <> value 0 <> showDefault <> help "header version")
   <*> option auto (long "hpd" <> metavar "WORD8" <> value 0 <> showDefault <> help "header pad")
-  <*> option auto (long "len" <> metavar "WORD16" <> help "entire length")
   <*> some1 (option auto $ long "prsnt" <> metavar "WORD32" <> help "header present fields")
 
 parseFld :: Parser Fld
