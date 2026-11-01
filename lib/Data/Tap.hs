@@ -189,4 +189,12 @@ defFlds = [Fld "TSFT" 0 [U64 0], Fld "Flags" 1 [U8 0]
   , Fld "dBm TX power" 10 [S8 0], Fld "Antenna" 11 [U8 0]
   , Fld "dB antenna signal" 12 [U8 0], Fld "dB antenna noise" 13 [U8 0]
   , Fld "RX flags" 14 [U16 0], Fld "TX flags" 15 [U16 0]
-  , Fld "MCS" 19 [U8 0, U8 0, U8 0]]
+  , Fld "MCS" 19 [U8 0, U8 0, U8 0]
+  , Fld "A-MPDU status" 20 [U32 0, U16 0, U8 0, U8 0]
+  , Fld "VHT" 21 $ [U16 0, U8 0, U8 0] ++ replicate 4 (U8 0) ++
+    [U8 0, U8 0, U16 0]
+  , Fld "timestamp" 22 [U64 0, U16 0, U8 0, U8 0]
+  , Fld "HE" 23 $ replicate 6 $ U16 0
+  , Fld "HE-MU" 24 $ [U16 0, U16 0] ++ replicate 4 (U8 0) ++ replicate 4 (U8 0)
+  , Fld "HE-MU-other-user" 25 [U16 0, U16 0, U8 0, U8 0]
+  , Fld "0-length-PSDU" 26 [U8 0], Fld "L-SIG" 27 [U16 0, U16 0]]

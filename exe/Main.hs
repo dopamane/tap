@@ -12,10 +12,10 @@ import Paths_tap
 
 main :: IO ()
 main = do
-  cli <- customExecParser prefs' $ pinfo $ showVersion version
-  case cli of
-    ReadTap d fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap d t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
+  CLI d cmd <- customExecParser prefs' $ pinfo $ showVersion version
+  case cmd of
+    ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
+    WriteTap t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
 
 valid :: [Fld] -> Tap -> Tap
 valid d t
@@ -40,7 +40,9 @@ unkNums d (f:fs)
   | num f `elem` fmap num d = unkNums d fs
   | otherwise = True
 
-data CLI = ReadTap [Fld] (Maybe FilePath) | WriteTap [Fld] Tap (Maybe FilePath)
+data CLI = CLI [Fld] Cmd
+
+data Cmd = ReadTap (Maybe FilePath) | WriteTap Tap (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -49,11 +51,11 @@ pinfo :: String -> ParserInfo CLI
 pinfo v = info (parser <**> simpleVersioner v <**> helper) $ progDesc "radiotap"
 
 parser :: Parser CLI
-parser = hsubparser $ mconcat
-  [ command "r" $ info (ReadTap <$> parseDefn <*>
+parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
+  [ command "r" $ info (ReadTap <$>
     optional (fileArg "binary intput file or stream STDIN")) $
     progDesc "read radiotap data"
-  , command "w" $ info (WriteTap <$> parseDefn <*> parseTap <*>
+  , command "w" $ info (WriteTap <$> parseTap <*>
     optional (fileArg "binary output file or stream STDOUT")) $
     progDesc "write radiotap data"]
 
@@ -83,7 +85,7 @@ parseFld = parserOptionGroup "Fields" $ asum
 
 parseDefn :: Parser [Fld]
 parseDefn = parserOptionGroup "Definition" $ asum
-  [ flag' defFlds $ long "dflds" <> help "radiotap defined fields"
+  [ flag' defFlds $ long "dfs" <> help "radiotap defined fields"
   , some parseFldDef
   ]
 
