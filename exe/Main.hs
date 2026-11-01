@@ -4,6 +4,8 @@ import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as BS
 import Data.List
+import Data.List.NonEmpty(NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import Data.Tap
 import Data.Version
 import Options.Applicative
@@ -12,10 +14,18 @@ import Paths_tap
 
 main :: IO ()
 main = do
-  CLI d cmd <- customExecParser prefs' $ pinfo $ showVersion version
+  CLI dfn cmd <- customExecParser prefs' $ pinfo $ showVersion version
+  d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
     WriteTap t fM -> maybe BS.putStr BS.writeFile fM $ runPut $ putTap $ valid d t
+
+fmt :: [Fld] -> Either String [Fld]
+fmt = go . NE.groupWith num . sortOn num
+  where
+    go [] = Right []
+    go ((f:|[]):gs) = (f:) <$> go gs
+    go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
 
 valid :: [Fld] -> Tap -> Tap
 valid d t
