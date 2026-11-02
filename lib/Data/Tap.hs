@@ -6,6 +6,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
+import Data.Function
 import Data.Int
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
@@ -116,10 +117,10 @@ instance Binary Hdr where
 -- | expect sorted input
 mkPrsnts :: [Int] -> NonEmpty Word32
 mkPrsnts ns = let (ns', w) = setPrsnts ns 0
-              in w :| go ns' 1
+              in applyWhen (not $ null ns') (`setBit` 31) w :| go ns' 1
   where
     go []  _ = []
-    go ns' i = w : go ns'' (i + 1)
+    go ns' i = applyWhen (not $ null ns'') (`setBit` 31) w : go ns'' (i + 1)
       where
         (ns'', w) = setPrsnts ns' i
 

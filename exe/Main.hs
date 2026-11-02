@@ -59,7 +59,7 @@ pinfo :: String -> ParserInfo CLI
 pinfo v = info (parser <**> simpleVersioner v <**> helper) $ progDesc "radiotap"
 
 parser :: Parser CLI
-parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
+parser = liftA2 CLI (concat <$> many parseDefn) $ hsubparser $ mconcat
   [ command "r" $ info (ReadTap <$>
     optional (fileArg "binary intput file or stream STDIN")) $
     progDesc "read radiotap data"
@@ -87,16 +87,12 @@ parseFld = parserOptionGroup "Fields" $ asum
 
 parseDefn :: Parser [Fld]
 parseDefn = parserOptionGroup "Definition" $ asum
-  [ flag [] [] $ long "empty" <> help "empty field definition default"
-  , flag' defFlds $ long "dfs" <> help "radiotap defined fields"
-  , some parseFldDef
+  [ flag' defFlds $ long "dfs" <> help "radiotap defined fields"
+  , fmap pure $ Fld
+    <$> strOption (long "name" <> metavar "STR" <> help "field definition name")
+    <*> option auto (long "num" <> metavar "INT" <> help "field definition num")
+    <*> many parseStruct
   ]
-
-parseFldDef :: Parser Fld
-parseFldDef = Fld
-  <$> strOption (long "name" <> metavar "STR" <> help "field definition name")
-  <*> option auto (long "num" <> metavar "INT" <> help "field definition num")
-  <*> many parseStruct
 
 parseStruct :: Parser Struct
 parseStruct = asum
@@ -112,12 +108,12 @@ parseStruct = asum
 
 parseStructVal :: Parser Struct
 parseStructVal = asum
-  [ option auto $ long "u8"  <> metavar "WORD8"  <> help "u8 value"
-  , option auto $ long "s8"  <> metavar "INT8"   <> help "s8 value"
-  , option auto $ long "u16" <> metavar "WORD16" <> help "u16 value"
-  , option auto $ long "s16" <> metavar "INT16"  <> help "s16 value"
-  , option auto $ long "u32" <> metavar "WORD32" <> help "u32 value"
-  , option auto $ long "s32" <> metavar "INT32"  <> help "s32 value"
-  , option auto $ long "u64" <> metavar "WORD64" <> help "u64 value"
-  , option auto $ long "s64" <> metavar "INT64"  <> help "s64 value"
+  [ fmap U8  $ option auto $ long "u8"  <> metavar "WORD8"  <> help "u8 value"
+  , fmap S8  $ option auto $ long "s8"  <> metavar "INT8"   <> help "s8 value"
+  , fmap U16 $ option auto $ long "u16" <> metavar "WORD16" <> help "u16 value"
+  , fmap S16 $ option auto $ long "s16" <> metavar "INT16"  <> help "s16 value"
+  , fmap U32 $ option auto $ long "u32" <> metavar "WORD32" <> help "u32 value"
+  , fmap S32 $ option auto $ long "s32" <> metavar "INT32"  <> help "s32 value"
+  , fmap U64 $ option auto $ long "u64" <> metavar "WORD64" <> help "u64 value"
+  , fmap S64 $ option auto $ long "s64" <> metavar "INT64"  <> help "s64 value"
   ]
