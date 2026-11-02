@@ -4,8 +4,6 @@ import Control.Monad
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as BS
-import Data.List
-import Data.List.NonEmpty(NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Tap
 import Data.Version
@@ -29,23 +27,6 @@ main = do
         fail $ "struct length too long: " <> show tlen
       maybe BS.putStr BS.writeFile fM $ runPut $ putTap $
         Tap (Hdr v p (fromIntegral tlen) ps) fs'
-
-fmt :: [Fld] -> Either String [Fld]
-fmt = go . NE.groupWith num . sortOn num
-  where
-    go [] = Right []
-    go ((f:|[]):gs)
-      | num f `mod` 32 == 31 = Left $ "reserved field number: " <> show f
-      | otherwise = (f:) <$> go gs
-    go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
-
-unk :: [Int] -> [Fld] -> Either String [Fld]
-unk ds = go
-  where
-    go [] = Right []
-    go (f:fs)
-      | num f `elem` ds = (f:) <$> go fs
-      | otherwise = Left $ "undefined field: " ++ show f
 
 data CLI = CLI [Fld] Cmd
 
@@ -76,14 +57,9 @@ parseHdr = parserOptionGroup "Header" $ (,)
   <*> option auto (long "hpd" <> metavar "WORD8" <> value 0 <> showDefault <> help "header pad")
 
 parseFld :: Parser Fld
-parseFld = parserOptionGroup "Fields" $ asum
-  [ fmap (Fld "TSFT" 0 . pure . U64) $ option auto $ long "tsft" <> metavar "WORD64" <>
-    help "time sync function timer usec"
-  , fmap (Fld "Flags" 1 . pure . U8) $ option auto $ long "flags" <> metavar "WORD8" <>
-    help "properties of tx and rx frames"
-  , Fld "" <$> option auto (long "fld" <> metavar "INT" <> help "field num")
-    <*> many parseStructVal
-  ]
+parseFld = parserOptionGroup "Fields" $ Fld ""
+  <$> option auto (short 'f' <> metavar "INT" <> help "field num")
+  <*> many parseStructVal
 
 parseDefn :: Parser [Fld]
 parseDefn = parserOptionGroup "Definition" $ asum

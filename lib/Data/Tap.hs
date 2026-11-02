@@ -1,5 +1,7 @@
-module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Fld(..), Struct(..)
-  , defFlds, structLen, padStructs, mkPrsnts) where
+module Data.Tap (Tap(..), getTap, putTap
+  , Hdr(..), mkPrsnts
+  , Fld(..), fmt, unk, defFlds
+  , Struct(..), structLen, padStructs) where
 
 import Control.Monad
 import Data.Binary
@@ -10,6 +12,7 @@ import Data.Function
 import Data.Int
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import Data.Monoid
 
 data Tap = Tap{hdr :: Hdr, fields :: [Fld]}
@@ -133,6 +136,25 @@ setPrsnts ns i = (ns', appEndo e 0)
 
 data Fld = Fld{name :: String, num :: Int, structs :: [Struct]}
   deriving (Eq, Read, Show)
+
+-- | format fields: sort then check reserved and duplicates
+fmt :: [Fld] -> Either String [Fld]
+fmt = go . NE.groupWith num . sortOn num
+  where
+    go [] = Right []
+    go ((f:|[]):gs)
+      | num f `mod` 32 == 31 = Left $ "reserved field number: " <> show f
+      | otherwise = (f:) <$> go gs
+    go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
+
+-- | verify all fields are defined
+unk :: [Int] -> [Fld] -> Either String [Fld]
+unk ds = go
+  where
+    go [] = Right []
+    go (f:fs)
+      | num f `elem` ds = (f:) <$> go fs
+      | otherwise = Left $ "undefined field: " ++ show f
 
 data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
   | S32 Int32 | U64 Word64 | S64 Int64
