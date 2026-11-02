@@ -34,7 +34,9 @@ fmt :: [Fld] -> Either String [Fld]
 fmt = go . NE.groupWith num . sortOn num
   where
     go [] = Right []
-    go ((f:|[]):gs) = (f:) <$> go gs
+    go ((f:|[]):gs)
+      | num f `mod` 32 == 31 = Left $ "reserved field number: " <> show f
+      | otherwise = (f:) <$> go gs
     go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
 
 unk :: [Int] -> [Fld] -> Either String [Fld]
