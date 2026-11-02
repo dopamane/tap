@@ -1,3 +1,4 @@
+-- | [radiotap](https://radiotap.org/)
 module Data.Tap (Tap(..), getTap, putTap
   , Hdr(..), mkPrsnts
   , Fld(..), fmt, unk, defFlds
@@ -8,6 +9,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
+import Data.Either
 import Data.Function
 import Data.Int
 import Data.List
@@ -15,12 +17,15 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Monoid
 
+-- | radiotap data
 data Tap = Tap{hdr :: Hdr, fields :: [Fld]}
   deriving (Eq, Read, Show)
 
+-- | decoder
 getTap :: [Fld] -> Get Tap
 getTap dfn = get >>= \h -> Tap h <$> getFlds dfn h
 
+-- | encoder
 putTap :: Tap -> Put
 putTap (Tap h fs) = put h <> foldMap putStruct (padStructs $ structs =<< fs)
 
@@ -36,6 +41,7 @@ getFlds dfn Hdr{prsnt=p:|ps} = do
 presents :: Int -> Word32 -> [Int]
 presents i w = [b + i * 32 | b <- [0..30], testBit w b]
 
+-- chunk structs into fields
 elaborate :: [Fld] -> [Int] -> [Struct] -> Either String [Fld]
 elaborate dfn = go
   where
@@ -96,6 +102,7 @@ matchStruct dfn strct = case (dfn, strct) of
 lookupFld :: [Fld] -> Int -> Maybe Fld
 lookupFld dfn n = find ((n ==).num) dfn
 
+-- | header
 data Hdr = Hdr{ver :: Word8, hpd :: Word8, len :: Word16, prsnt :: NonEmpty Word32}
   deriving (Eq, Read, Show)
 
@@ -134,6 +141,7 @@ setPrsnts ns i = (ns', appEndo e 0)
     (bs, ns') = span (\n -> n < (i + 1) * 32) ns
     e = mconcat [Endo $ flip setBit $ b `mod` 32 | b <- bs]
 
+-- | radiotap field
 data Fld = Fld{name :: String, num :: Int, structs :: [Struct]}
   deriving (Eq, Read, Show)
 
@@ -148,18 +156,26 @@ fmt = go . NE.groupWith num . sortOn num
     go ((f:|fs):_) = Left $ "duplicate numbered fields: " ++ show (f:fs)
 
 -- | verify all fields are defined
-unk :: [Int] -> [Fld] -> Either String [Fld]
-unk ds = go
+unk :: [Fld] -> [Fld] -> Either String [Fld]
+unk dfn = go
   where
     go [] = Right []
-    go (f:fs)
-      | num f `elem` ds = (f:) <$> go fs
-      | otherwise = Left $ "undefined field: " ++ show f
+    go (f:fs) = case lookupFld dfn $ num f of
+      Nothing -> Left $ "undefined field: " ++ show f
+      Just d
+        | mismatchStructs (structs d) (structs f) -> Left $
+          "mismatched structs: dfn=" ++ show (structs d) ++ " field=" ++ show (structs f)
+        | otherwise -> (f:) <$> go fs
 
+mismatchStructs :: [Struct] -> [Struct] -> Bool
+mismatchStructs ds = any isLeft . zipWith matchStruct ds
+
+-- | radiotap structure
 data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
   | S32 Int32 | U64 Word64 | S64 Int64
   deriving (Eq, Read, Show)
 
+-- | byte length
 structLen :: Struct -> Integer
 structLen s = case s of
   U8{}  -> 1
@@ -187,6 +203,7 @@ getStruct s = case s of
   U64{} -> U64 <$> getWord64le
   S64{} -> S64 <$> getInt64le
 
+-- | insert natural alignment padding
 padStructs :: [Struct] -> [Struct]
 padStructs [] = []
 padStructs [s] = [s]
@@ -231,6 +248,7 @@ pad a b = case (a,b) of
   (S32{},S64{}) -> 4
   (_    ,_    ) -> 0
 
+-- | radiotap defined fields
 defFlds :: [Fld]
 defFlds = [Fld "TSFT" 0 [U64 0], Fld "Flags" 1 [U8 0]
   , Fld "Rate" 2 [U8 0], Fld "Channel" 3 [U16 0, U16 0]

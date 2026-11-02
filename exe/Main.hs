@@ -18,7 +18,7 @@ main = do
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
     WriteTap (v,p) fs fM -> do
-      fs' <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt fs
+      fs' <- either (fail . mappend "field error: ") return $ unk d =<< fmt fs
       let ps = mkPrsnts $ map num fs'
           hlen = 4 + fromIntegral (NE.length ps) * 4
           slen = sum $ map structLen $ padStructs $ structs =<< fs'

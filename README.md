@@ -26,6 +26,7 @@ Development
 
 ```
 cabal build
-cabal run test
+cabal haddock
+cabal test
 cabal run tap -- --help
 ```
