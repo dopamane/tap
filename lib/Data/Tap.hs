@@ -9,7 +9,6 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
-import Data.Either
 import Data.Function
 import Data.Int
 import Data.List
@@ -162,13 +161,10 @@ unk dfn = go
     go [] = Right []
     go (f:fs) = case lookupFld dfn $ num f of
       Nothing -> Left $ "undefined field: " ++ show f
-      Just d
-        | mismatchStructs (structs d) (structs f) -> Left $
+      Just d -> case match (structs d) (structs f) of
+        Right (_, []) -> (f:) <$> go fs
+        _ -> Left $
           "mismatched structs: dfn=" ++ show (structs d) ++ " field=" ++ show (structs f)
-        | otherwise -> (f:) <$> go fs
-
-mismatchStructs :: [Struct] -> [Struct] -> Bool
-mismatchStructs ds = any isLeft . zipWith matchStruct ds
 
 -- | radiotap structure
 data Struct = U8 Word8 | S8 Int8 | U16 Word16 | S16 Int16 | U32 Word32
