@@ -11,7 +11,6 @@ import Data.Tap
 import Data.Version
 import Data.Word
 import Options.Applicative
-import Options.Applicative.NonEmpty
 import Paths_tap
 
 main :: IO ()
@@ -20,9 +19,10 @@ main = do
   d <- either (fail . mappend "definition error: ") return $ fmt dfn
   case cmd of
     ReadTap fM -> print . runGet (getTap d) =<< maybe BS.getContents BS.readFile fM
-    WriteTap (v,p,ps) fs fM -> do
+    WriteTap (v,p) fs fM -> do
       fs' <- either (fail . mappend "field error: ") return $ unk (map num d) =<< fmt fs
-      let hlen = 4 + fromIntegral (NE.length ps) * 4
+      let ps = mkPrsnts $ map num fs'
+          hlen = 4 + fromIntegral (NE.length ps) * 4
           slen = sum $ map structLen $ padStructs $ structs =<< fs'
           tlen = hlen + slen
       when (tlen >= fromIntegral (maxBound :: Word16)) $
@@ -48,7 +48,7 @@ unk ds = go
 data CLI = CLI [Fld] Cmd
 
 data Cmd = ReadTap (Maybe FilePath)
-  | WriteTap (Word8, Word8, NonEmpty Word32) [Fld] (Maybe FilePath)
+  | WriteTap (Word8, Word8) [Fld] (Maybe FilePath)
 
 prefs' :: ParserPrefs
 prefs' = prefs $ showHelpOnError <> showHelpOnEmpty
@@ -68,11 +68,10 @@ parser = liftA2 CLI parseDefn $ hsubparser $ mconcat
 fileArg :: String -> Parser FilePath
 fileArg h = strArgument $ metavar "FILE" <> completer (bashCompleter "file") <> help h
 
-parseHdr :: Parser (Word8, Word8, NonEmpty Word32)
-parseHdr = parserOptionGroup "Header" $ (,,)
+parseHdr :: Parser (Word8, Word8)
+parseHdr = parserOptionGroup "Header" $ (,)
   <$> option auto (long "ver" <> metavar "WORD8" <> value 0 <> showDefault <> help "header version")
   <*> option auto (long "hpd" <> metavar "WORD8" <> value 0 <> showDefault <> help "header pad")
-  <*> some1 (option auto $ long "prsnt" <> metavar "WORD32" <> help "header present fields")
 
 parseFld :: Parser Fld
 parseFld = parserOptionGroup "Fields" $ asum

@@ -1,5 +1,5 @@
 module Data.Tap (Tap(..), getTap, putTap, Hdr(..), Fld(..), Struct(..)
-  , defFlds, structLen, padStructs) where
+  , defFlds, structLen, padStructs, mkPrsnts) where
 
 import Control.Monad
 import Data.Binary
@@ -9,6 +9,7 @@ import Data.Bits
 import Data.Int
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Monoid
 
 data Tap = Tap{hdr :: Hdr, fields :: [Fld]}
   deriving (Eq, Read, Show)
@@ -111,6 +112,23 @@ instance Binary Hdr where
     where
       go [] = mempty
       go (p:ps) = putWord32le p <> if testBit p 31 then go ps else mempty
+
+-- | expect sorted input
+mkPrsnts :: [Int] -> NonEmpty Word32
+mkPrsnts ns = let (ns', w) = setPrsnts ns 0
+              in w :| go ns' 1
+  where
+    go []  _ = []
+    go ns' i = w : go ns'' (i + 1)
+      where
+        (ns'', w) = setPrsnts ns' i
+
+-- req sorted input nums
+setPrsnts :: [Int] -> Int -> ([Int], Word32)
+setPrsnts ns i = (ns', appEndo e 0)
+  where
+    (bs, ns') = span (\n -> n < (i + 1) * 32) ns
+    e = mconcat [Endo $ flip setBit $ b `mod` 32 | b <- bs]
 
 data Fld = Fld{name :: String, num :: Int, structs :: [Struct]}
   deriving (Eq, Read, Show)
