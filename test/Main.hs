@@ -18,7 +18,25 @@ import Test.Tasty.Hedgehog
 import Test.Tasty.HUnit
 
 main :: IO ()
-main = defaultMain $ testGroup "Data.Tap" [hdrBinTrip, testDetail]
+main = defaultMain $ testGroup "Data.Tap" [hdrBinTrip, testDetail, testMkPrsnts]
+
+testMkPrsnts :: TestTree
+testMkPrsnts = testCaseSteps "mkPrsnts" $ \step -> do
+  step "empty"
+  mkPrsnts [] @?= 0 :| []
+  step "singleton"
+  mkPrsnts [0] @?= 1 :| []
+  step "few"
+  mkPrsnts [0, 3, 5] @?= 0b0000_0000_0000_0000_0000_0000_0010_1001 :| []
+  step "two"
+  mkPrsnts [0, 35] @?=
+    0b1000_0000_0000_0000_0000_0000_0000_0001 :|
+    [0b0000_0000_0000_0000_0000_0000_0000_1000]
+  step "gap"
+  mkPrsnts [2, 64] @?=
+    0b1000_0000_0000_0000_0000_0000_0000_0100 :|
+    [ 0b1000_0000_0000_0000_0000_0000_0000_0000
+    , 0b0000_0000_0000_0000_0000_0000_0000_0001]
 
 testDetail :: TestTree
 testDetail = testCaseSteps "detail" $ \step -> do
