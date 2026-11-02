@@ -13,7 +13,7 @@ tap --name foo --num 0 --du8 --du8 --name bar --num 1 --ds16 w \
   -f 0 --u8 0xab --u8 0xcd \
   -f 1 --s16 100 \
   bar.bin
-tap --name foo --num 0 --du8 --du8 --name bar --ds16 r bar.bin
+tap --name foo --num 0 --du8 --du8 --name bar --num 1 --ds16 r bar.bin
 ```
 
 Install
